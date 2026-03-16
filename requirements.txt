@@ -1,0 +1,12 @@
+# 核心依赖
+minio                    # 对象存储客户端
+langchain-openai         # LangChain OpenAI 集成
+langgraph                # 工作流编排框架
+grandalf                 # 图布局算法（LangGraph 依赖）
+pymilvus                 # Milvus 向量数据库客户端
+sentence-transformers    # 句向量模型
+neo4j                    # Neo4j 图数据库驱动
+pymongo                  # MongoDB 驱动
+mineru[all]              # PDF 解析工具  https://github.com/opendatalab/MinerU/blob/master/README_zh-CN.md
+openai-agents            # OpenAI Agent 框架
+grandalf
