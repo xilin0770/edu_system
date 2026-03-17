@@ -44,7 +44,7 @@ DEFAULT_RELATION_TYPES = "RELATED_TO"
 # ------------------------------------------
 # Chunk标签节点创建
 CYPHER_MERGE_CHUNK = """
-    MERGE (c:Chunk {id: $chunk_id, math_concept: $math_concept})
+    MERGE (c:Chunk {title: $title, id: $chunk_id, math_concept: $math_concept})
 """
 
 # Entity标签节点的创建
@@ -63,7 +63,7 @@ CYPHER_MERGE_ENTITY_TEMPLATE = """
 # Entity关联Chunk
 CYPHER_LINK_ENTITY_TO_CHUNK = """
     MATCH (n:Entity {name: $name, math_concept: $math_concept})
-    MATCH (c:Chunk  {id: $chunk_id, math_concept: $math_concept})
+    MATCH (c:Chunk  {title: $title, id: $chunk_id, math_concept: $math_concept})
     MERGE (n)-[:MENTIONED_IN]->(c)
 """
 
@@ -272,7 +272,7 @@ class _Neo4jGraphWriter:
         except Exception as e:
             raise Neo4jError(f"Neo4j 清理失败: {e}")
         
-    def insert(self, driver, entities, relations, chunk_id: str, math_concept: str):
+    def insert(self, driver, entities, relations, chunk_id: str, math_concept: str, title: str):
         """
         Neo4J的写入
 
@@ -297,13 +297,13 @@ class _Neo4jGraphWriter:
         try:
             with self._session(driver) as session:
                 session.execute_write(
-                    self._write_graph_tx, entities, relations, chunk_id, math_concept
+                    self._write_graph_tx, entities, relations, chunk_id, math_concept, title
                 )
                     
         except Exception as e:
             raise Neo4jError(f"Neo4j 写入失败: {e}")
         
-    def _write_graph_tx(self, tx, entities, relations, chunk_id: str, math_concept: str):
+    def _write_graph_tx(self, tx, entities, relations, chunk_id: str, math_concept: str, title: str):
         """
         Neo4J的写入事务
 
@@ -318,7 +318,7 @@ class _Neo4jGraphWriter:
 
         """
         # 1. 创建chunk节点
-        tx.run(CYPHER_MERGE_CHUNK, chunk_id=chunk_id, math_concept=math_concept)
+        tx.run(CYPHER_MERGE_CHUNK, title=title, chunk_id=chunk_id, math_concept=math_concept)
 
         # 2. 创建实体节点+ 关联到chunk
         for entity in entities:
@@ -438,6 +438,7 @@ class KnowLedgeGraphNode(BaseNode):
             chunk_id = chunk.get('chunk_id')
             math_concept = chunk.get('math_concept')
             content = chunk.get('content')
+            title = chunk.get('title')
 
             # 2. 处理单个chunk
             try:
@@ -445,6 +446,7 @@ class KnowLedgeGraphNode(BaseNode):
                 entities_count, relations_count = self._process_single_chunk(   chunk_id,
                                                                                 math_concept,
                                                                                 content,
+                                                                                title,
                                                                                 milvus_client,
                                                                                 neo4j_driver)
                 stats.processed_chunks += 1
@@ -459,6 +461,7 @@ class KnowLedgeGraphNode(BaseNode):
     def _process_single_chunk(  self, chunk_id: str,
                                 math_concept: str,
                                 content: str,
+                                title:str,
                                 milvus_client: MilvusClient,
                                 neo4j_driver) -> Tuple[int, int]:
 
@@ -484,7 +487,7 @@ class KnowLedgeGraphNode(BaseNode):
 
         # 3.2 将清洗后的实体以及关系类型都存储到neo4j
         neo4j_start = time.time()
-        self._neo4j_writer.insert(neo4j_driver, final_entities, final_relations, chunk_id, math_concept)
+        self._neo4j_writer.insert(neo4j_driver, final_entities, final_relations, chunk_id, math_concept, title)
         neo4j_cost = time.time() - neo4j_start
 
         total_cost = time.time() - llm_start
@@ -783,11 +786,12 @@ class KnowLedgeGraphNode(BaseNode):
                 content = chunk.get("content")
                 chunk_id = str(chunk.get("chunk_id"))
                 math_concept = chunk.get("math_concept")
+                title = chunk.get("title")[2:]
 
                 # 像线程池中提交任务 返回任务对象
                 future = pool.submit(
                     self._process_single_chunk,
-                    chunk_id,math_concept, content, milvus_client,neo4j_driver
+                    chunk_id,math_concept, content, title, milvus_client,neo4j_driver
                 )
                 future_to_idx[future] = (i, chunk_id)
 
