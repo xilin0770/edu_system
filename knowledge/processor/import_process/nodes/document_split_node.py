@@ -349,7 +349,7 @@ class DocumentSplitNode(BaseNode):
             body = chunk.get("body")
             file_title = chunk.get("file_title")
             parent_title = chunk.get("parent_title")
-            content = f"{title}\n{body}"
+            # content = f"{title}\n{body}"
 
             # 2. 构建最终chunk对象
             assemble_chunk = {
@@ -357,7 +357,7 @@ class DocumentSplitNode(BaseNode):
                 "body" : body,
                 "file_title": file_title,
                 "parent_title": parent_title,
-                "content": content,
+                # "content": content,
             }
 
             # 3. 判断part是否存在

@@ -46,7 +46,6 @@ class EntryNode(BaseNode):
         if not file_dir or not import_file_path:
             raise ValidationError("文件目录或者文件不存在", self.name)
 
-        # import_file_path: D:\develop\develop\workspace\pycharm\251020\shopkeeper_brain\knowledge\processor\import_process\import_temp_dir\万用表的使用.pdf
         # 3.使用标准的Path对象操作文件逻辑
         path = Path(import_file_path)
 

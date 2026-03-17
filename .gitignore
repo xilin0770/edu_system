@@ -21,11 +21,6 @@ knowledge/schema/
 knowledge/prompts
 knowledge/utils
 
-# 导入部分，neo4j导入有点问题
-# https://github.com/xilin0770/shopkeeper_briain.git
-# shopkeeper_briain
-
 # https://github.com/xilin0770/Graduation_Project.git
 # Graduation_Project
-knowledge/processor/import_process/nodes/kg_graph_node.py
 

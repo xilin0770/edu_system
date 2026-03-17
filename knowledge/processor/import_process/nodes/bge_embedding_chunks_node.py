@@ -51,14 +51,17 @@ class BgeEmbeddingChunksNode(BaseNode):
         # 1. 循环处理所有chunk的要嵌入的内容拼接
         embedding_contents = []
         for _, chunk in enumerate(batch):
-            # 1.1 提取content
-            content = chunk.get('content')
+            # 1.1 提取title  as： “# 1、定积分的概念-2-2”
+            title = chunk.get('title')
+
+            # 1.1 提取body
+            body = chunk.get('body')
 
             # 1.2 提取item_name
-            item_name = chunk.get('item_name')
+            # math_concept = chunk.get('math_concept')
 
             # 1.3 拼接要嵌入的最终内容
-            embedding_content = f"{item_name}\n{content}"
+            embedding_content = f"{title}\n{body}"
 
             embedding_contents.append(embedding_content)
 
@@ -127,19 +130,26 @@ if __name__ == '__main__':
     base_temp_dir = Path(
         r"D:\pycharm\project\shopkeeper_brain\scripts\processed\高中数学知识点归纳\hybrid_auto")
 
-    input_path = base_temp_dir / "chunks.json"
+    # input_path = base_temp_dir / "chunks.json"
     output_path = base_temp_dir / "chunks_vector.json"
 
     # 1. 读取上游状态
-    if not input_path.exists():
-        print(f" 找不到输入文件: {input_path}")
+    # if not input_path.exists():
+    #     print(f" 找不到输入文件: {input_path}")
 
-    with open(input_path, "r", encoding="utf-8") as f:
-        content = json.load(f)
+    # with open(input_path, "r", encoding="utf-8") as f:
+    #     content = json.load(f)
 
     # 2. 构建模拟的图状态 (Graph State)
     state = {
-        "chunks": content
+        "chunks": [{
+            "title": "# 6、参数方程的概念",
+            "body": "\n在平面直角坐标系中，如果曲线上任意一点的坐标\n\n$\\mathbf{x},\\mathbf{y}$ 都是某个变数 $\\mathbf{t}$ 的函数 $\\left\\{ \\begin{array}{l}\\mathbf{x} = \\mathbf{f}(\\mathbf{t}),\\\\ \\mathbf{y} = \\mathbf{g}(\\mathbf{t}), \\end{array} \\right.$ 并且对于 $\\mathbf{t}$ 的每一个允许值，由这个方程所确定的点 $\\mathbf{M}(\\mathbf{x},\\mathbf{y})$ 都在这条曲线上，那么这个方程就叫做这条曲线的 参数方\n\n程，联系变数 $x, y$ 的变数 $t$ 叫做参变数，简称参数。相对于参数方程而言，直接给出点的坐标间关系的方程叫 做普通方程。\n",
+            "file_title": "万用表的使用",
+            "parent_title": "# 6、参数方程的概念",
+            "content": "# 6、参数方程的概念\n\n在平面直角坐标系中，如果曲线上任意一点的坐标\n\n$\\mathbf{x},\\mathbf{y}$ 都是某个变数 $\\mathbf{t}$ 的函数 $\\left\\{ \\begin{array}{l}\\mathbf{x} = \\mathbf{f}(\\mathbf{t}),\\\\ \\mathbf{y} = \\mathbf{g}(\\mathbf{t}), \\end{array} \\right.$ 并且对于 $\\mathbf{t}$ 的每一个允许值，由这个方程所确定的点 $\\mathbf{M}(\\mathbf{x},\\mathbf{y})$ 都在这条曲线上，那么这个方程就叫做这条曲线的 参数方\n\n程，联系变数 $x, y$ 的变数 $t$ 叫做参变数，简称参数。相对于参数方程而言，直接给 出点的坐标间关系的方程叫做普通方程。\n",
+            "math_concept": "集合 - 集合概念与表示\n函数 - 函数概念与性质\n函数 - 基本初等函数 - 指数函数\n函数 - 基本初等函数 - 对数函数\n函数 - 基本初等函数 - 幂函数\n立体几何 - 立体几何初步\n解析几何 - 平面解析几何初步\n算法 - 算法初步\n统计 - 统计\n概率 - 概率\n函数 - 基本初等函数 - 三角函数\n向量 - 平面向量\n三角函数 - 三角恒等变换\n解三角形 - 解三角形\n数列 - 数列\n不等式 - 不等式\n常用逻辑用语 - 常用逻辑用语\n解析几何 - 圆锥曲线与方程\n微积分 - 导数及其应用\n统计 - 统计案例\n推理与证明 - 推理与证明\n复数 - 数系 的扩充与复数\n算法 - 框图\n立体几何 - 空间向量与立体几何\n计数原理 - 计数原理\n概率 - 随机变量及其分布列\n数学史 - 数学史选讲\n信息安全与密码 - 信息安全与密码\n几何 - 球面上的几何\n代数 - 对称与群\n几何 - 欧拉公式与闭曲面分类\n几何 - 三等分角与数域扩充\n几何 -  几何证明选讲\n代数 - 矩阵与变换\n数列 - 数列与差分\n解析几何 - 坐标系与参数方程\n不等式 - 不等式选讲\n数论 - 初等数论初步\n优选法与试验设计 - 优选法与试验设计初步\n统筹法与图论 - 统筹法与图论初步\n风险与决策 - 风险与决策\n开关电路与布尔代数 - 开关电路与布尔代数"
+        }]
     }
 
     # 3. 触发节点执行
