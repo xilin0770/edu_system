@@ -12,8 +12,8 @@ demo*
 .venv
 
 knowledge/processor/query_process
-knowledge/api/
-knowledge/services/
+
+
 knowledge/test/
 knowledge/core/
 knowledge/front/
@@ -21,6 +21,7 @@ knowledge/schema/
 knowledge/prompts
 knowledge/temp_data/
 knowledge/utils/
+!knowledge/utils/task_util.py
 
 README.md
 
