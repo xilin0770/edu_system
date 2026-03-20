@@ -341,7 +341,7 @@ if __name__ == "__main__":
     # {
     #     'original_query': '18年的Ⅰ卷中“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中的“也”有什么作用？',
     #     'rewritten_query': '请问“也”字在文言文句子“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中有什么作用？',
-    #     'item_names': ['也']
+    #     'entity_names': ['也']
     # }
     print(f"确认商品: {result.get('entity_names')}")
     print(f"改写查询: {result.get('rewritten_query')}")
