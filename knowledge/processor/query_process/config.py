@@ -98,6 +98,9 @@ class QueryConfig:
     openai_api_key: str = field(
         default_factory=lambda: os.getenv("OPENAI_API_KEY", "")
     )
+    bailian_api_key: str = field(
+        default_factory=lambda: os.getenv("BAILIAN_API_KEY", "")
+    )
     default_model: str = field(
         default_factory=lambda: os.getenv("MODEL", "")
     )

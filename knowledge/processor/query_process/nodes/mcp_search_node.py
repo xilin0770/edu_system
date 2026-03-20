@@ -1,9 +1,7 @@
 from knowledge.processor.query_process.state import QueryGraphState
 from knowledge.processor.query_process.base import BaseNode
 from knowledge.processor.query_process.exceptions import StateFieldEooror
-from knowledge.prompts.query.query_prompt import USER_HYDE_PROMPT_TEMPLATE
 
-from langchain_core.messages import SystemMessage, HumanMessage
 from agents.mcp import MCPServerStreamableHttp, MCPServerStreamableHttpParams
 import json
 import asyncio
@@ -26,7 +24,7 @@ class McpSearchNode(BaseNode):
 
     def process(self, state: QueryGraphState) -> QueryGraphState:
         # 1. 参数校验
-        validated_query, validated_item_names = self._validate_query_inputs(state)
+        validated_query, validated_entity_names = self._validate_query_inputs(state)
 
         # 2. 创建mcp客户端 并且执行工具调用
         mcp_result = asyncio.run(self._create_execute_web_search(validated_query))
@@ -57,18 +55,18 @@ class McpSearchNode(BaseNode):
         # 1. 获取state的rewritten_query字段
         rewritten_query = state.get("rewritten_query", "")
 
-        # 2. 获取state中的item_names字段
-        item_names = state.get("item_names", "")
+        # 2. entity_names
+        entity_names = state.get("entity_names", "")
 
         # 3. 校验
         if not rewritten_query or not isinstance(rewritten_query, str):
             raise StateFieldEooror(field_name="rewritten_query", node_name=self.name, expected_type = str)
         
-        if not item_names or not isinstance(item_names, list):
-            raise StateFieldEooror(field_name="item_names", node_name=self.name, expected_type = list)
+        if not entity_names or not isinstance(entity_names, list):
+            raise StateFieldEooror(field_name="entity_names", node_name=self.name, expected_type = list)
         
         # 4. 返回
-        return rewritten_query, item_names
+        return rewritten_query, entity_names
     
     async def _create_execute_web_search(self, query: str) -> dict:
         """
@@ -83,18 +81,22 @@ class McpSearchNode(BaseNode):
         Returns:
             工具调用的结果字典。
         """
-        # 1. 创建mcp客户端[1. host 2. http 2.1 streamable(主要建议使用)http 2.2sse http 3. stdio sse]
-        mcp_client = MCPServerStreamableHttp(
-            name = "通用搜索",
-            cache_tools_list = True, # mcp服务端工具列表的工具做缓存
-            params = MCPServerStreamableHttpParams({
-                "url": self.config.mcp_dashscope_base_url, # 服务端的端点
-                "headers":{"Authorization": self.config.openai_api_key} # 认证权限 api_key
-            },
-            timeout= 10, # 超时时间 10秒
-            sse_read_timeout= 60, # sse的超时时间 60秒
+        try:
+            # 1. 创建mcp客户端[1. host 2. http 2.1 streamable(主要建议使用)http 2.2sse http 3. stdio sse]
+            mcp_client = MCPServerStreamableHttp(
+                name = "通用搜索",
+                cache_tools_list = True, # mcp服务端工具列表的工具做缓存
+                params = MCPServerStreamableHttpParams({
+                    "url": self.config.mcp_dashscope_base_url, # 服务端的端点
+                    "headers":{"Authorization": self.config.bailian_api_key} # 认证权限 api_key
+                },
+                timeout= 10, # 超时时间 10秒
+                sse_read_timeout= 60, # sse的超时时间 60秒
+                )
             )
-        )
+        except Exception as e:
+            self.logger.error(f"创建MCP客户端失败: {e}")
+            return []
         
         try:
             # 2. 建立mcp链接
@@ -141,9 +143,9 @@ class McpSearchNode(BaseNode):
 
 if __name__ == '__main__':
     state = {
-        # "rewritten_query": "万用表如何测量电阻",
-        "rewritten_query": "今天的小米汽车的股价是多少",
-        "item_names": ["RS-12 数字万用表"]  # 对齐
+        'original_query': '18年的Ⅰ卷中“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中的“也”有什么作用？',
+        'rewritten_query': '请问“也”字在文言文句子“鲁芝字世英，扶风郿人也，世有名德，为西州豪族。”中有什么作用？',
+        'entity_names': ['也']
     }
 
     mcp_search = McpSearchNode()
@@ -152,3 +154,21 @@ if __name__ == '__main__':
 
     for r in result.get('web_search_docs'):
         print(json.dumps(r, ensure_ascii=False, indent=2))
+
+"""
+{
+  "snippet": "1. 用在句末,表示判断语气;2. 用在句末,表示陈述或解释语气;3. 用在句中,表示语气停顿;4. 用在句末,表示疑问语气;5. 用在句中或句末,表示肯定、感叹的语气;6. 用在句末,表示祈使语气;7. (也哉)语气助词连用,加强语气,多表感叹或反诘;8. (也者)语气助词连 用,起说明或解释作用。",
+  "title": "“也”字在文言文中有什么意义?请说明其具体意思和用法。",
+  "url": "https://easylearn.baidu.com/edu-page/tiangong/questiondetail?id=1733383458356775512&fr=search"
+}
+{
+  "snippet": "文言虚词“也”的用法如下: 1. 句末语气词: ①表示判断语气,如“张良曰:‘沛公之参乘樊哙者也。’(《鸿门宴》)”; ②表示陈述或解释语气,如“雷霆乍惊,宫车过也。(《阿房宫赋》)”; ③用在句中或句末,表示肯定、感叹的语气,如“灭六国者六国也,非秦也;族秦者秦也,非天下也。(《阿房宫赋》)”; ④用在句末,表示疑问或反诘语气,如“使秦复爱六国之人,则递三世可至万世而为君,谁得而族灭也?(《阿房宫赋》)”; ⑤用在句末,表示祈使语气,如“以乱易整,不武。吾其还也。(《烛之武退秦师》)”; 2. 句中语气词: 用在句中,表示语气停顿,如“其闻道也亦先 乎吾。(《师说》)”; 3. 固定词组: “也哉”语气助词连用,为加强语气,多有感叹或反诘之意,如“岂独伶人也哉?(《伶官传序》)”。",
+  "title": "百度试题",
+  "url": "https://easylearn.baidu.com/edu-page/tiangong/questiondetail?id=1846656156957095356&fr=search"
+}
+{
+  "snippet": "古文中“也”字主要作语气助词,用法包括:1. 表判断,用于句末,确认主语的性质或类别,如“陈胜者,阳城人也”;2. 表肯定或强调,加强语气,如“吾上恐负朝廷,下恐愧吾师也”;3. 表停顿,用于句中,舒缓语气,如“惩山北之塞,出入之迂也,聚室而谋曰”;4. 表感叹,表达强烈情感,如“悲哉,世也!”。注:“也”在古文中较少作副词,原提及的副词用法多为现代汉语用法,古文中“也”主要为语气助词。",
+  "title": "请简述古文中“也”字的主要用法。",
+  "url": "https://easylearn.baidu.com/edu-page/tiangong/questiondetail?id=1733391330765146436&fr=search"
+}
+"""
