@@ -21,9 +21,9 @@ from pymilvus import MilvusClient
 from langchain_core.messages import SystemMessage, HumanMessage
 from knowledge.processor.query_process.state import QueryGraphState
 from knowledge.processor.query_process.base import BaseNode, T
-from knowledge.processor.query_process.exceptions import StateFieldError
+from knowledge.processor.query_process.exceptions import StateFieldEooror
 from knowledge.utils.llm_client import get_llm_client
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embeddings
+from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embedding
 from knowledge.utils.milvus_util import get_milvus_client, create_hybrid_search_requests, execute_hybrid_search_query, \
     fetch_chunks_by_chunk_ids
 from knowledge.prompts.query.query_prompt import ENTITY_EXTRACT_SYSTEM_PROMPT
@@ -50,8 +50,8 @@ OneHopRelation = Dict[str, Any]
 # Neo4j的Cypher语句
 _CYPHER_EXACT_SEEDS = """
 MATCH (n:Entity)
-WHERE n.item_name=$item_name AND n.name=$name
-RETURN  n.item_name as item_name,n.name as name
+WHERE n.chinese_concept=$chinese_concept AND n.name=$name
+RETURN  n.chinese_concept as chinese_concept,n.name as name
 LIMIT 1
 """
 
@@ -59,17 +59,17 @@ LIMIT 1
 _CYPHER_FUZZY_SEEDS = """
 MATCH (n:Entity)
 WHERE toLower(n.name) CONTAINS toLower($name)
-    AND n.item_name = $item_name
-RETURN n.name AS name, n.item_name AS item_name
+    AND n.chinese_concept = $chinese_concept
+RETURN n.name AS name, n.chinese_concept AS chinese_concept
 LIMIT $limit
 """
 
 # 查询种子节点的一跳关系
 _CYPHER_ONE_HOP_RELATIONS = """
 
-MATCH (seed:Entity {name:$name,item_name:$item_name})-[r]-(nbr:Entity)
+MATCH (seed:Entity {name:$name,chinese_concept:$chinese_concept})-[r]-(nbr:Entity)
 
-WHERE type(r) <> 'MENTIONED_IN' AND nbr.item_name=$item_name
+WHERE type(r) <> 'MENTIONED_IN' AND nbr.chinese_concept=$chinese_concept
 
 RETURN 
     CASE WHEN startNode(r)=seed  THEN  seed.name  ELSE nbr.name END AS head,
@@ -83,11 +83,11 @@ _CYPHER_LOOKUP_CHUNK = """
 
 UNWIND $weighted_nodes as n
 
-MATCH (e:Entity{name:n.entity_name,item_name:n.item_name})-[r:MENTIONED_IN]->(c:Chunk{item_name:n.item_name})
+MATCH (e:Entity{name:n.entity_name,chinese_concept:n.chinese_concept})-[r:MENTIONED_IN]->(c:Chunk{chinese_concept:n.chinese_concept})
 
 WITH c,sum(n.weight) AS score, count(e) AS cnt
 
-RETURN c.id AS chunk_id, c.item_name AS item_name, score, cnt
+RETURN c.id AS chunk_id, c.chinese_concept AS chinese_concept, score, cnt
 
 ORDER BY score DESC, cnt DESC,chunk_id DESC
 
@@ -189,15 +189,15 @@ def _clean_seed_rows(rows: List[Dict[str, Any]]) -> List[EntitySeedNode]:
     # 1. 遍历
     for row in rows:
         # 1.1 获取item_name
-        item_name = row.get('item_name', '').strip()
+        chinese_concept = row.get('chinese_concept', '').strip()
         # 1.2 获取entity_name
         entity_name = row.get('name', '').strip()
         # 1.3 判断
-        if not item_name or not entity_name:
+        if not chinese_concept or not entity_name:
             continue
         # 1.4 封装一下
         clean_seeds_result.append({
-            "item_name": item_name,
+            "chinese_concept": chinese_concept,
             "entity_name": entity_name
         })
     # 2. 返回
@@ -209,7 +209,7 @@ def _one_hop_relations_to_texts(triples: List[OneHopRelation]) -> List[str]:
         return []
     docs: List[str] = []
     for tr in triples:
-        it = (tr.get("item_name") or "").strip()
+        it = (tr.get("chinese_concept") or "").strip()
         h = (tr.get("head") or "").strip()
         r = (tr.get("rel") or "").strip()
         t = (tr.get("tail") or "").strip()
@@ -290,7 +290,15 @@ class _EntityAligner:
         Returns:
         Dict[str,Any]:该字典准备封装两个key.
         第一个key:entities_aligned:[] 所有对齐后的实体名
+        ["entity_name1","entity_name2","entity_name3"]
         第二key:entity_elements[]: 所有对齐后的实体信息[source_id ,distance,origin,aligned,content]
+        {
+                "original": entity_name,
+                "aligned": ent.get("entity_name"),
+                "score": score,
+                "source_chunk_id": ent.get("source_chunk_id"),
+                "reason": "top1_per_item",
+        }
 
         """
 
@@ -312,7 +320,7 @@ class _EntityAligner:
             return fallback_result
 
         # 4. 向量化实体名
-        embedding_result = generate_hybrid_embeddings(embedding_model=embedding_model, embedding_documents=entity_names)
+        embedding_result = generate_hybrid_embedding(embedding_model=embedding_model, embedding_documents=entity_names)
 
         # 5. 检验嵌入结果
         if embedding_result is None:
@@ -349,14 +357,14 @@ class _EntityAligner:
                 # a) 获取对齐后的实体名
                 aligned_name = detail.get("aligned")
 
-                # b) 获取商品名
-                item_name = detail.get("item_name")
+                # b) 获取source_chunk_id
+                source_chunk_id = detail.get("source_chunk_id")
 
                 # c) 判断对齐名是否有
                 if aligned_name:
 
-                    # 去重 同名实体在不同商品下都保留
-                    key = (item_name, aligned_name)
+                    # 去重 同名实体在不同source_chunk_id下都保留
+                    key = (source_chunk_id, aligned_name)
                     if key not in seen:
                         seen.add(key)
                         aligned_entities_name.append(aligned_name)
@@ -390,13 +398,12 @@ class _EntityAligner:
             List[Dict[str, Any]]
             [
                 {
-                    "original": entity_name,
-                    "aligned": ent.get("entity_name"),
-                    "score": score,
-                    "item_name": item_name,
-                    "source_chunk_id": ent.get("source_chunk_id"),
-                    "reason": "top1_per_item"
-                }
+                "original": entity_name,
+                "aligned": ent.get("entity_name"),
+                "score": score,
+                "source_chunk_id": ent.get("source_chunk_id"),
+                "reason": "top1_per_item",
+            }
             ]
         """
         dense_vector = embedding_result_dense[index]
@@ -417,7 +424,7 @@ class _EntityAligner:
                                             ranker_weights=(0.4, 0.6),
                                             norm_score=True,
                                             limit=5,
-                                            output_fields=["source_chunk_id", "context", "entity_name"],
+                                            output_fields=["source_chunk_id", "context", "entity_name", "chinese_concept"],
                                             )
 
         # 4. 解析结果
@@ -432,11 +439,11 @@ class _EntityAligner:
             entity = hit.get("entity")
 
             # b) 从实体中获取
-            item_name = entity.get("item_name").strip()
+            source_chunk_id = entity.get("source_chunk_id").strip()
 
             # c) 只保留每个 item_name 下的第一个（即最高分）
-            if item_name not in best_by_item:
-                best_by_item[item_name] = hit
+            if source_chunk_id not in best_by_item:
+                best_by_item[source_chunk_id] = hit
 
         # 4.2 是否有最好的item_name
         if not best_by_item:
@@ -444,7 +451,7 @@ class _EntityAligner:
 
         # 4.3  item_name 分组输出结果，过滤低于阈值的
         results: List[Dict[str, Any]] = []
-        for item_name, best in best_by_item.items():
+        for source_chunk_id, best in best_by_item.items():
             # a) 获取最好的那一个分数
             score = best.get("distance")
 
@@ -460,9 +467,9 @@ class _EntityAligner:
                 "original": entity_name,
                 "aligned": ent.get("entity_name"),
                 "score": score,
-                "item_name": item_name,
                 "source_chunk_id": ent.get("source_chunk_id"),
                 "reason": "top1_per_item",
+                "chinese_concept": ent.get("chinese_concept"),
             })
 
         # 4.4 全部低于阈值时返回未命中
@@ -528,17 +535,17 @@ class _Neo4jGraphReader:
         # 2. 遍历所有pair对
         for pair in pairs:
             # 2.1 获取item_name
-            item_name = pair.get('item_name', '').strip()
+            chinese_concept = pair.get('chinese_concept', '').strip()
             # 2.2 获取entity_name
             entity_name = pair.get('entity_name', '').strip()
             # 2.3 过滤掉无效
-            if not item_name or not entity_name:
+            if not chinese_concept or not entity_name:
                 continue
             # 2.4 执行cypher语句（1) 精确查询 2）可能要模糊查询）
             try:
                 with self._session() as session:
                     # 2.5 执行种子节点查询
-                    candidates_seed_nodes = self._execute_seed_nodes(session, item_name, entity_name,
+                    candidates_seed_nodes = self._execute_seed_nodes(session, chinese_concept, entity_name,
                                                                     self._kg_max_seed_candidates)
 
                     # 2.6 将查询到的种子节点加入到最终列表中
@@ -556,7 +563,7 @@ class _Neo4jGraphReader:
         self._logger.info(f"获取种子节点 {len(final_seeds_result)} 个")
         return final_seeds_result
 
-    def _execute_seed_nodes(self, session, item_name: str, entity_name: str, _kg_max_seed_candidates: int) -> List[
+    def _execute_seed_nodes(self, session, chinese_concept: str, entity_name: str, _kg_max_seed_candidates: int) -> List[
         EntitySeedNode]:
         """
         执行种子节点查询
@@ -575,7 +582,7 @@ class _Neo4jGraphReader:
         # .data() 方法将查询结果转换为字典列表格式，每项包含匹配的实体信息（如 item_name 和 name 字段）
         exact_rows = session.execute_read(
             lambda tx: tx.run(
-                _CYPHER_EXACT_SEEDS, item_name=item_name, name=entity_name
+                _CYPHER_EXACT_SEEDS, chinese_concept=chinese_concept, name=entity_name
             ).data()
         )
         if exact_rows:
@@ -584,7 +591,7 @@ class _Neo4jGraphReader:
         # 2. 模糊查询
         fuzzy_rows = session.execute_read(
             lambda tx: tx.run(
-                _CYPHER_FUZZY_SEEDS, item_name=item_name, name=entity_name, limit=_kg_max_seed_candidates
+                _CYPHER_FUZZY_SEEDS, chinese_concept=chinese_concept, name=entity_name, limit=_kg_max_seed_candidates
             ).data() 
         )
         return _clean_seed_rows(fuzzy_rows)
@@ -611,12 +618,12 @@ class _Neo4jGraphReader:
         one_hop_relations_final_result = []
         # 2. 遍历所有的种子节点
         for seed_node in seed_nodes:
-            # 2.1 提取item_name
-            item_name = seed_node.get('item_name', "")
+            # 2.1 提取chinese_concept
+            chinese_concept = seed_node.get('chinese_concept', "")
             # 2.2 提取entity_name
             seed_name = seed_node.get('entity_name', "")
             # 2.3 判断是否都存在
-            if not item_name or not seed_name:
+            if not chinese_concept or not seed_name:
                 continue
 
             # 2.4 执行Cypher语句
@@ -624,7 +631,7 @@ class _Neo4jGraphReader:
                 with self._session() as session:
 
                     # a) 查询种子节点的一跳关系
-                    seed_one_hop_relations: List[OneHopRelation] = self._execute_one_hop_relations( session, item_name,
+                    seed_one_hop_relations: List[OneHopRelation] = self._execute_one_hop_relations( session, chinese_concept,
                                                                                                     seed_name,
                                                                                                     self.kg_max_triples_per_seed)
                     if not seed_one_hop_relations:
@@ -638,13 +645,13 @@ class _Neo4jGraphReader:
                         rel = seed_one_hop_relation.get('rel')
                         # b.3 获取tail
                         tail = seed_one_hop_relation.get('tail')
-                        # b.4 获取item_name
-                        item_name = seed_one_hop_relation.get('item_name')
+                        # b.4 获取chinese_concept
+                        chinese_concept = seed_one_hop_relation.get('chinese_concept')
 
                         # b.4 去重（同一条边不能重复出现）同一个商品下，不运行有重复的 不同商品下不能叫重复的边
                         # 场景：A节点是种子节点 令居也是种子节点（A节点作为种子查询邻居节点的时候已经把他们的关系查找到了）所以当在以邻居节点为种子查询的时候，就会出现重复的边。因此要过滤掉
                         # 去重key
-                        key = (item_name, head, rel, tail)
+                        key = (chinese_concept, head, rel, tail)
 
                         if key not in seen:
                             seen.add(key)
@@ -662,13 +669,13 @@ class _Neo4jGraphReader:
         self._logger.info(f"查询 {len(seed_nodes)} 个种子节点对应的关系:{len(one_hop_relations_final_result)} 条")
         return one_hop_relations_final_result
 
-    def _execute_one_hop_relations(self, session, item_name: str, seed_name: str, kg_max_triples_per_seed: int) -> List[
+    def _execute_one_hop_relations(self, session, chinese_concept: str, seed_name: str, kg_max_triples_per_seed: int) -> List[
         OneHopRelation]:
         """
 
         Args:
             session: neo4j驱动
-            item_name: 商品名
+            chinese_concept: 中文概念名
             seed_name: 种子节点名字
             kg_max_triples_per_seed:种子节点最大的关系数
 
@@ -679,7 +686,7 @@ class _Neo4jGraphReader:
         # 1. 根据session执行查询方法
         one_hop_relations = session.execute_read(
             lambda tx: tx.run(
-                _CYPHER_ONE_HOP_RELATIONS, item_name=item_name, name=seed_name, limit=kg_max_triples_per_seed
+                _CYPHER_ONE_HOP_RELATIONS, chinese_concept=chinese_concept, name=seed_name, limit=kg_max_triples_per_seed
             ).data()
         )
 
@@ -706,7 +713,7 @@ class _Neo4jGraphReader:
                 "head": head,
                 "rel": rel,
                 "tail": tail,
-                "item_name": item_name
+                "chinese_concept": chinese_concept
             })
         return one_hop_relations_result
 
@@ -737,11 +744,11 @@ class _Neo4jGraphReader:
         # 3. 遍历所有的种子节点
         for seed_node in seed_nodes:
             # 3.1 获取item_name
-            item_name = seed_node.get('item_name')
+            chinese_concept = seed_node.get('chinese_concept')
             # 3.2 获取节点名
             seed_name = seed_node.get('entity_name')
 
-            key = (item_name, seed_name)
+            key = (chinese_concept, seed_name)
             if key not in seen:
                 seen.add(key)
                 weight_map[key] = SEED_NODE_WEIGHT
@@ -755,16 +762,16 @@ class _Neo4jGraphReader:
             tail = one_hop_relation.get('tail')
 
             # 4.3 获取商品的名字
-            item_name = one_hop_relation.get('item_name')
+            chinese_concept = one_hop_relation.get('chinese_concept')
 
             # 4.4 为邻居节点赋值权重
-            if head and (item_name, head) not in weight_map:
-                weight_map[(item_name, head)] = NER_NODE_WEIGHT
+            if head and (chinese_concept, head) not in weight_map:
+                weight_map[(chinese_concept, head)] = NER_NODE_WEIGHT
 
-            if tail and (item_name, tail) not in weight_map:
-                weight_map[(item_name, tail)] = NER_NODE_WEIGHT
+            if tail and (chinese_concept, tail) not in weight_map:
+                weight_map[(chinese_concept, tail)] = NER_NODE_WEIGHT
 
-        return [{"item_name": it, "entity_name": en, "weight": w}
+        return [{"chinese_concept": it, "entity_name": en, "weight": w}
                 for (it, en), w in weight_map.items()]
 
     def find_nodes_chunk_id(self, weighted_nodes: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -795,14 +802,14 @@ class _Neo4jGraphReader:
         # 2. 处理结果
         for chunk_row in sorted_node_chunk_id:
             chunk_id = chunk_row.get('chunk_id', "").strip()
-            item_name = chunk_row.get('item_name', "").strip()
+            chinese_concept = chunk_row.get('chinese_concept', "").strip()
             score = chunk_row.get('score')
 
-            if chunk_id and item_name:
+            if chunk_id and chinese_concept:
                 hits.append({
                     "id": None,
                     "distance": float(score or 0.0),
-                    "entity": {"chunk_id": str(chunk_id), "item_name": str(item_name)}
+                    "entity": {"chunk_id": str(chunk_id), "chinese_concept": str(chinese_concept)}
                 })
 
         return hits
@@ -816,7 +823,7 @@ def _build_item_entity_pairs(aligned_entities_info: List[Dict[str, Any]]) -> Lis
         aligned_entities_info: 对齐后的实体详情列表
 
     Returns:
-        商品+实体名的pairs
+        source_chunk_id+entity_name对的pairs
 
     """
     # 1. 判断对齐后的实体详情是否存在
@@ -828,19 +835,19 @@ def _build_item_entity_pairs(aligned_entities_info: List[Dict[str, Any]]) -> Lis
 
     # 2. 遍历对齐后的实体详情
     for aligned_entity_info in aligned_entities_info:
-        # 2.1 获取商品名item_name
-        item_name = aligned_entity_info.get('item_name', "").strip()
+        # 2.1 获取chinese_concept
+        chinese_concept = aligned_entity_info.get('chinese_concept', "").strip()
         # 2.2 获取对齐后的实体名
         aligned_entity_name = aligned_entity_info.get('aligned', "").strip()
         # 2.3 商品名&实体名都存在
-        if not (item_name and aligned_entity_name):
+        if not (chinese_concept and aligned_entity_name):
             continue
         # 2.4 去重
-        key = (item_name, aligned_entity_name)
+        key = (chinese_concept, aligned_entity_name)
         if key not in seen:
             seen.add(key)
             item_entity_pairs.append({
-                "item_name": item_name,
+                "chinese_concept": chinese_concept,
                 "entity_name": aligned_entity_name
             })
     # 3. 返回
@@ -890,7 +897,7 @@ class _ChunkBackFiller:
             chunks: List[Dict[str, Any]] = fetch_chunks_by_chunk_ids(
                 collection_name=self._collection_name,
                 chunk_ids=chunk_ids,
-                output_fields=['chunk_id', 'content', 'title', 'item_name'],
+                output_fields=['chunk_id', 'body', 'title', 'file_title', 'classical_chinese_concept'],
                 batch_size=30
             )
             if not chunks:
@@ -1009,7 +1016,7 @@ class KnowledgeGraphSearchNode(BaseNode):
         aligned_entities_name = entities_name_aligned.get('entities_aligned_name')
         # 获取所有对齐后的实体详情（结构信息细粒）
         aligned_entities_info = entities_name_aligned.get('entities_aligned_elements')
-        # 构建商品名+实体名的pair对
+        # 构建source_chunk_id+entity_name对的pair对
         item_entity_pairs: List[ItemEntityPair] = _build_item_entity_pairs(aligned_entities_info)
 
         # 2.2 利用Neo4J的读取器组件对Neo4J进行相关的查询(Neo4J)
@@ -1034,7 +1041,7 @@ class KnowledgeGraphSearchNode(BaseNode):
             "kg_triples": triples_docs,  # 关系文本描述 → 送入答案生成 prompt
             "kg_seed_nodes": seed_nodes,
             "kg_triples_raw": one_hop_relations,
-            "kg_entities": entities_name,
+            "kg_entities": validated_entity_names,
             "kg_aligned_entities": aligned_entities_name,
             "kg_alignments": aligned_entities_info,
         }
