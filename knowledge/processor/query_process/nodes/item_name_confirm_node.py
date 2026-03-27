@@ -5,10 +5,9 @@ logger = logging.getLogger(__name__)
 
 from knowledge.processor.query_process.state import QueryGraphState
 from knowledge.processor.query_process.base import BaseNode, T
-from knowledge.utils.llm_client import get_llm_client
-from knowledge.utils.llm_client import get_llm_client
+from knowledge.utils.llm_client_util import get_llm_client
 from knowledge.utils.milvus_util import create_hybrid_search_requests, execute_hybrid_search_query
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embedding
+from knowledge.utils.bge_m3_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embeddings
 from knowledge.utils.milvus_util import get_milvus_client
 from knowledge.prompts.query.match_query_prompt import CLASSICAL_WORD_EXTRACT_TEMPLATE
 
@@ -67,7 +66,7 @@ class ItemNameAligner():
             return []
         
         # 4. 嵌入classical_word过去稠密、稀疏向量
-        hybrid_embedding_result = generate_hybrid_embedding(classical_words, embedding_model)
+        hybrid_embedding_result = generate_hybrid_embeddings(embedding_documents = classical_words, embedding_model = embedding_model)
 
         # 5. 遍历LLM提取的每一个classical_word,在milvus中进行向量搜索
         for index, classical_word in enumerate(classical_words):

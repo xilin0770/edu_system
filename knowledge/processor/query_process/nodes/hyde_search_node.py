@@ -1,10 +1,10 @@
 from knowledge.processor.query_process.state import QueryGraphState
 from knowledge.processor.query_process.base import BaseNode
 from knowledge.utils.milvus_util import create_hybrid_search_requests, execute_hybrid_search_query
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embedding
+from knowledge.utils.bge_m3_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embeddings
 from knowledge.utils.milvus_util import get_milvus_client, create_hybrid_search_requests, execute_hybrid_search_query
 from knowledge.processor.query_process.exceptions import StateFieldEooror
-from knowledge.utils.llm_client import get_llm_client
+from knowledge.utils.llm_client_util import get_llm_client
 from knowledge.prompts.query.match_query_prompt import CLASSICAL_HYDE_PROMPT_TEMPLATE
 
 from langchain_core.messages import SystemMessage, HumanMessage
@@ -30,7 +30,7 @@ class HyDeSearchNode(BaseNode):
 
         # 4. 对假设性文档的嵌入
         embedding_document = f"{validated_query}\n {hy_document}"
-        embedding_result = generate_hybrid_embedding(embedding_documents=[embedding_document], embedding_model=embedding_model)
+        embedding_result = generate_hybrid_embeddings(embedding_documents=[embedding_document], embedding_model=embedding_model)
         if not embedding_result:
             return state
         

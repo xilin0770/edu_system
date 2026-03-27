@@ -22,11 +22,10 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from knowledge.processor.query_process.state import QueryGraphState
 from knowledge.processor.query_process.base import BaseNode, T
 from knowledge.processor.query_process.exceptions import StateFieldEooror
-from knowledge.utils.llm_client import get_llm_client
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embedding
+from knowledge.utils.llm_client_util import get_llm_client
+from knowledge.utils.bge_m3_embedding_util import get_beg_m3_embedding_model, generate_hybrid_embeddings
 from knowledge.utils.milvus_util import get_milvus_client, create_hybrid_search_requests, execute_hybrid_search_query, \
     fetch_chunks_by_chunk_ids
-from knowledge.prompts.query.query_prompt import ENTITY_EXTRACT_SYSTEM_PROMPT
 from knowledge.utils.neo4j_util import get_neo4j_driver
 
 # -------------------------------------------------
@@ -320,7 +319,7 @@ class _EntityAligner:
             return fallback_result
 
         # 4. 向量化实体名
-        embedding_result = generate_hybrid_embedding(embedding_model=embedding_model, embedding_documents=entity_names)
+        embedding_result = generate_hybrid_embeddings(embedding_model=embedding_model, embedding_documents=entity_names)
 
         # 5. 检验嵌入结果
         if embedding_result is None:

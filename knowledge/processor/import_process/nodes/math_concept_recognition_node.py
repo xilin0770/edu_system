@@ -1,11 +1,11 @@
 from knowledge.processor.import_process.base import BaseNode, setup_logging, T
 from knowledge.processor.import_process.state import ImportGraphState
-from knowledge.processor.import_process.exceptions import ValidationError, FileProcessingError, ImageProcessingError, EmbeddingError
+from knowledge.processor.import_process.exceptions import ValidationError, EmbeddingError
 from knowledge.processor.import_process.config import get_config
-from knowledge.utils.llm_client import get_llm_client
+from knowledge.utils.llm_client_util import get_llm_client
 from knowledge.utils.milvus_util import get_milvus_client
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model
-from knowledge.prompts.upload.Classical_Chinese_knowledge import CLASSICAL_CHINESE_CONCEPT_PROMPT, CLASSICAL_CHINESE_QA_USER_PROMPT_TEMPLATE
+from knowledge.utils.bge_m3_embedding_util import get_beg_m3_embedding_model
+from knowledge.prompts.upload.Classical_Chinese_knowledge import CLASSICAL_CONCEPT_SYSTEM_PROMPT, CLASSICAL_CONCEPT_USER_PROMPT_TEMPLATE
 
 from langchain_core.messages import SystemMessage, HumanMessage
 from pymilvus import DataType
@@ -134,7 +134,7 @@ class MathConceptRecognitionNode(BaseNode):
             return file_title
 
         # 2. 构建LLM的提示词
-        prompt = CLASSICAL_CHINESE_QA_USER_PROMPT_TEMPLATE.format(
+        prompt = CLASSICAL_CONCEPT_USER_PROMPT_TEMPLATE.format(
             file_title=file_title,
             context=classical_chinese_concept_context
         )
@@ -142,7 +142,7 @@ class MathConceptRecognitionNode(BaseNode):
         # 3. 调用LLM模型
         try:
             llm_response = llm_client.invoke([
-                SystemMessage(content=CLASSICAL_CHINESE_CONCEPT_PROMPT),
+                SystemMessage(content=CLASSICAL_CONCEPT_SYSTEM_PROMPT),
                 HumanMessage(content=prompt)
             ])
             # 4. 提取LLM的回复内容

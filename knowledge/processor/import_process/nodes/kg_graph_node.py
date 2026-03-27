@@ -13,11 +13,11 @@ from knowledge.processor.import_process.base import BaseNode
 from knowledge.processor.import_process.config import ImportConfig
 from knowledge.processor.import_process.state import ImportGraphState
 from knowledge.processor.import_process.exceptions import Neo4jError, MilvusError
-from knowledge.prompts.upload.Classical_Chinese_knowledge import CLASSICAL_CHINESE_KG_PROMPT
+from knowledge.prompts.upload.Classical_Chinese_knowledge import CLASSICAL_KNOWLEDGE_GRAPH_SYSTEM_PROMPT
 from knowledge.utils.milvus_util import get_milvus_client
 from knowledge.utils.neo4j_util import get_neo4j_driver
-from knowledge.utils.llm_client import get_llm_client
-from knowledge.utils.bge_me_embedding_util import get_beg_m3_embedding_model
+from knowledge.utils.llm_client_util import get_llm_client
+from knowledge.utils.bge_m3_embedding_util import get_beg_m3_embedding_model
 
 # ------------------------------------------
 # 常量
@@ -520,7 +520,7 @@ class KnowLedgeGraphNode(BaseNode):
             try:
                 # 2.1 调用模型
                 llm_response = llm_client.invoke([
-                    SystemMessage(content=CLASSICAL_CHINESE_KG_PROMPT),
+                    SystemMessage(content=CLASSICAL_KNOWLEDGE_GRAPH_SYSTEM_PROMPT),
                     HumanMessage(content=f"切片信息\n\n{body}")
                 ])
                 # 2.2 获取内容

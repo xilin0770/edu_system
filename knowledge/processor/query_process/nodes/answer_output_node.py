@@ -3,8 +3,8 @@
 from typing import List, Dict, Any, Tuple
 from knowledge.processor.query_process.base import BaseNode
 from knowledge.processor.query_process.state import QueryGraphState
-from knowledge.prompts.query.match_query_prompt import CLASSICAL_ANSWER_GENERATE_TEMPLATE
-from knowledge.utils.llm_client import get_llm_client
+from knowledge.prompts.query.match_query_prompt import ANSWER_PROMPT
+from knowledge.utils.llm_client_util import get_llm_client
 from knowledge.utils.task_util import set_task_result
 from knowledge.utils.sse_util import push_sse_event, SSEEvent
 from knowledge.utils.mongo_history_util import save_chat_message
@@ -85,7 +85,7 @@ class AnswerOutputNode(BaseNode):
         )
 
         # 5. 组装提示词
-        return CLASSICAL_ANSWER_GENERATE_TEMPLATE.format(
+        return ANSWER_PROMPT.format(
             context=context_str or "无参考内容",
             history=history_str if history_str else "暂无历史对话",
             entity_names=", ".join(entity_names),
